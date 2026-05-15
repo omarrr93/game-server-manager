@@ -8,6 +8,7 @@ import { OverviewTab } from "./tabs/OverviewTab";
 import { ConsoleTab } from "./tabs/ConsoleTab";
 import { FileManagerTab } from "./tabs/FileManagerTab";
 import { SettingsTab } from "./tabs/SettingsTab";
+import { useServerStats } from "../../hooks/useServerStats";
 
 const TABS = [
   { label: "Overview", path: "" },
@@ -79,6 +80,9 @@ export function ServerDetail() {
   const suffix = location.pathname.replace(basePath, "").replace(/^\//, "");
   const activeTab = suffix === "" ? "" : suffix;
 
+  const isRunning = server?.instance?.status === "running";
+  const { history: statsHistory, latest: statsLatest } = useServerStats(id ?? "", isRunning);
+
   if (loading) return <Spinner />;
   if (!server) return (
     <div className="flex items-center justify-center min-h-screen text-gray-500">
@@ -88,7 +92,6 @@ export function ServerDetail() {
 
   const { definition, instance } = server;
   const status = instance?.status ?? "registered";
-  const isRunning = status === "running";
   const isBusy = status === "starting" || status === "stopping" || actionLoading;
 
   return (
@@ -178,7 +181,7 @@ export function ServerDetail() {
       {/* Tab content */}
       <div className="flex-1 max-w-6xl mx-auto w-full px-6 py-8">
         <Routes>
-          <Route index element={<OverviewTab server={server} />} />
+          <Route index element={<OverviewTab server={server} history={statsHistory} latest={statsLatest} />} />
           <Route path="console" element={<ConsoleTab server={server} />} />
           <Route path="files" element={<FileManagerTab server={server} />} />
           <Route path="settings" element={

@@ -1,20 +1,18 @@
 import { useEffect, useState } from "react";
-import { getStats } from "../../../api/client";
 import type { ContainerStats } from "../../../api/client";
 import type { ServerResponse } from "../../../types";
+import type { StatPoint } from "../../../hooks/useServerStats";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid
 } from "recharts";
 
+const CPU_STEPS = [100, 200, 400, 800, 1600, 3200];
+
 interface Props {
   server: ServerResponse;
-}
-
-interface StatPoint {
-  time: string;
-  cpu: number;
-  mem: number;
+  history: StatPoint[];
+  latest: ContainerStats | null;
 }
 
 function formatBytes(bytes: number): string {
@@ -34,13 +32,9 @@ function formatUptime(startedAt?: string): string {
   return `${s}s`;
 }
 
-const MAX_POINTS = 30;
-
-export function OverviewTab({ server }: Props) {
+export function OverviewTab({ server, history, latest }: Props) {
   const { definition, instance } = server;
   const isRunning = instance?.status === "running";
-  const [history, setHistory] = useState<StatPoint[]>([]);
-  const [latest, setLatest] = useState<ContainerStats | null>(null);
   const [uptime, setUptime] = useState(formatUptime(instance?.startedAt));
 
   // Update uptime every second
@@ -51,37 +45,8 @@ export function OverviewTab({ server }: Props) {
     return () => clearInterval(interval);
   }, [instance?.startedAt]);
 
-  // Poll stats
-  useEffect(() => {
-    if (!isRunning) return;
-    let cancelled = false;
-
-    async function fetchStats() {
-      try {
-        const data = await getStats(definition.id);
-        if (cancelled) return;
-
-        const memPct = data.memLimitBytes > 0
-          ? parseFloat(((data.memUsedBytes / data.memLimitBytes) * 100).toFixed(1))
-          : 0;
-
-        const point: StatPoint = {
-          time: new Date().toLocaleTimeString(),
-          cpu: parseFloat(data.cpuPercent.toFixed(1)),
-          mem: memPct,
-        };
-
-        setLatest(data);
-        setHistory((prev) => [...prev.slice(-(MAX_POINTS - 1)), point]);
-      } catch {
-        // Server might not be ready yet
-      }
-    }
-
-    fetchStats();
-    const interval = setInterval(fetchStats, 2000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [definition.id, isRunning]);
+  const maxCpu = history.length > 0 ? Math.max(...history.map((p) => p.cpu)) : 0;
+  const cpuCeiling = CPU_STEPS.find((s) => s >= maxCpu) ?? CPU_STEPS[CPU_STEPS.length - 1];
 
   const status = instance?.status ?? "registered";
 
@@ -142,7 +107,7 @@ export function OverviewTab({ server }: Props) {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#2d3139" />
                 <XAxis dataKey="time" tick={{ fill: "#6b7280", fontSize: 10 }} interval="preserveStartEnd" />
-                <YAxis domain={[0, 100]} tick={{ fill: "#6b7280", fontSize: 10 }} unit="%" />
+                <YAxis domain={[0, cpuCeiling]} allowDataOverflow={false} tick={{ fill: "#6b7280", fontSize: 10 }} unit="%" />
                 <Tooltip
                   contentStyle={{ backgroundColor: "#22262e", border: "1px solid #374151", borderRadius: "8px" }}
                   labelStyle={{ color: "#9ca3af", fontSize: 11 }}
