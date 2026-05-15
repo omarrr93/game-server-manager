@@ -2,7 +2,7 @@
 
 A self-hosted Docker-based game server control panel. Register, start, stop, and monitor game servers through a web UI — each server runs in an isolated Docker container managed by the control plane.
 
-Built as a personal alternative to Pterodactyl, designed to be simple, hackable, and free of multi-tenant overhead.
+Built as a personal alternative to Pterodactyl with some custom features for QOL. 
 
 ---
 
