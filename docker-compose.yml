@@ -1,0 +1,20 @@
+services:
+  gscp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gscp
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount the Docker socket so the control plane can manage containers
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Persist the SQLite database
+      - ./gscp.db:/app/gscp.db
+      # Persist game server data directories
+      - ./data:/app/data
+    environment:
+      - PORT=3000
+      - HOST=0.0.0.0
+      - DB_PATH=/app/gscp.db
+    restart: unless-stopped
