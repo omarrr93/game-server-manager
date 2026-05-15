@@ -41,6 +41,17 @@ export async function deregisterServer(id: string): Promise<void> {
   if (!res.ok) throw new Error("Failed to deregister server");
 }
 
+export async function sendCommand(id: string, command: string): Promise<string> {
+  const res = await fetch(`${BASE}/servers/${id}/exec`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ command }),
+  });
+  if (!res.ok) throw new Error("Failed to send command");
+  const data = await res.json();
+  return data.output as string;
+}
+
 export async function getLogs(id: string, tail = 100): Promise<string> {
   const res = await fetch(`${BASE}/servers/${id}/logs?tail=${tail}`);
   if (!res.ok) throw new Error("Failed to fetch logs");

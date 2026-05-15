@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { getLogs } from "../../../api/client";
+import { sendCommand } from "../../../api/client";
 import type { ServerResponse } from "../../../types";
+
+const MAX_LINES = 5000;
+
+type WsStatus = "idle" | "connecting" | "live" | "disconnected";
 
 interface Props {
   server: ServerResponse;
@@ -9,55 +13,124 @@ interface Props {
 export function ConsoleTab({ server }: Props) {
   const { definition, instance } = server;
   const isRunning = instance?.status === "running";
-  const [logs, setLogs] = useState<string>("");
+
+  const [lines, setLines] = useState<string[]>([]);
+  const [wsStatus, setWsStatus] = useState<WsStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [tail, setTail] = useState(200);
   const [command, setCommand] = useState("");
+  const [sending, setSending] = useState(false);
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef(true);
+  // Holds any incomplete log line that arrived mid-chunk and needs the next chunk
+  // to complete it before being flushed to state.
+  const pendingRef = useRef("");
 
   useEffect(() => {
-    if (!instance?.containerId) return;
-    let cancelled = false;
-
-    async function fetchLogs() {
-      try {
-        const data = await getLogs(definition.id, tail);
-        if (!cancelled) {
-          setLogs(data);
-          setError(null);
-        }
-      } catch {
-        if (!cancelled) setError("Failed to fetch logs");
-      }
+    if (!isRunning || !instance?.containerId) {
+      setWsStatus("idle");
+      return;
     }
 
-    fetchLogs();
-    const interval = setInterval(fetchLogs, 3000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [definition.id, instance?.containerId, tail]);
+    setLines([]);
+    pendingRef.current = "";
+    setError(null);
+    setWsStatus("connecting");
+
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const url = `${proto}//${window.location.host}/api/servers/${definition.id}/logs/stream?tail=${tail}`;
+    const ws = new WebSocket(url);
+
+    // Guard flag — set to false in cleanup so events from a superseded WebSocket
+    // (e.g. the one React StrictMode cancels on first mount) can never overwrite
+    // state that belongs to the newer connection.
+    let active = true;
+
+    ws.onopen = () => {
+      if (!active) return;
+      setWsStatus("live");
+    };
+
+    ws.onmessage = (event: MessageEvent<string>) => {
+      if (!active) return;
+      // Prepend any partial line buffered from the previous chunk.
+      const raw = pendingRef.current + (event.data as string);
+      const parts = raw.split("\n");
+
+      // The last element may be an incomplete line — hold it for the next chunk.
+      pendingRef.current = parts.pop() ?? "";
+
+      if (parts.length === 0) return;
+
+      setLines((prev) => {
+        const next = [...prev, ...parts.map((l) => l + "\n")];
+        // Cap to MAX_LINES to prevent unbounded memory growth on long-running servers.
+        return next.length > MAX_LINES ? next.slice(next.length - MAX_LINES) : next;
+      });
+    };
+
+    ws.onclose = () => {
+      if (!active) return;
+      // Flush any remaining partial line when the stream ends.
+      if (pendingRef.current) {
+        setLines((prev) => [...prev, pendingRef.current]);
+        pendingRef.current = "";
+      }
+      setWsStatus("disconnected");
+    };
+
+    ws.onerror = () => {
+      if (!active) return;
+      setError("WebSocket connection failed");
+      setWsStatus("disconnected");
+    };
+
+    return () => {
+      active = false;
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
+    };
+  }, [definition.id, instance?.containerId, isRunning, tail]);
 
   useEffect(() => {
     if (autoScrollRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [logs]);
+  }, [lines]);
 
-  function handleCommandSubmit(e: React.FormEvent) {
+  async function handleCommandSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!command.trim()) return;
-    // TODO: implement send command to container
-    console.log("Send command:", command);
+    const trimmed = command.trim();
+    if (!trimmed || sending) return;
+
+    setSending(true);
     setCommand("");
+
+    try {
+      await sendCommand(definition.id, trimmed);
+    } catch {
+      setError(`Failed to send command: ${trimmed}`);
+    } finally {
+      setSending(false);
+    }
   }
+
+  const statusLabel: Record<WsStatus, string> = {
+    idle: "Server is not running",
+    connecting: "Connecting...",
+    live: "Live output",
+    disconnected: "Disconnected — refresh the tab to reconnect",
+  };
 
   return (
     <div className="flex flex-col gap-4 h-full">
 
       {/* Controls */}
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-400">
-          {isRunning ? "Live output · polling every 3s" : "Server is not running"}
+        <p className={`text-sm ${wsStatus === "disconnected" ? "text-yellow-500" : wsStatus === "live" ? "text-green-500" : "text-gray-400"}`}>
+          {statusLabel[wsStatus]}
         </p>
         <select
           value={tail}
@@ -81,11 +154,15 @@ export function ConsoleTab({ server }: Props) {
       >
         {error ? (
           <span className="text-red-400">{error}</span>
-        ) : logs ? (
-          <pre className="whitespace-pre-wrap">{logs}</pre>
+        ) : lines.length > 0 ? (
+          <pre className="whitespace-pre-wrap">{lines.join("")}</pre>
         ) : (
           <span className="text-gray-600">
-            {isRunning ? "Waiting for output..." : "No logs available — server is stopped"}
+            {wsStatus === "connecting"
+              ? "Connecting..."
+              : isRunning
+              ? "Waiting for output..."
+              : "No logs available — server is stopped"}
           </span>
         )}
         <div ref={bottomRef} />
@@ -106,10 +183,10 @@ export function ConsoleTab({ server }: Props) {
         </div>
         <button
           type="submit"
-          disabled={!isRunning || !command.trim()}
+          disabled={!isRunning || !command.trim() || sending}
           className="px-4 py-3 text-sm font-medium rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          Send
+          {sending ? "..." : "Send"}
         </button>
       </form>
     </div>

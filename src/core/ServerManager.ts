@@ -169,6 +169,37 @@ export class ServerManager {
     return this.docker.getLogs(instance.containerId, tail);
   }
 
+  async streamLogs(
+    serverId: string,
+    tail: number,
+    onData: (chunk: string) => void,
+    onEnd: () => void
+  ): Promise<() => void> {
+    const instance = this.getInstanceOrThrow(serverId);
+
+    if (!instance.containerId) {
+      throw new Error(`Server ${serverId} has no associated container`);
+    }
+
+    return this.docker.streamLogs(instance.containerId, tail, onData, onEnd);
+  }
+
+  async sendCommand(serverId: string, command: string): Promise<string> {
+    const definition = this.getDefinitionOrThrow(serverId);
+    const instance = this.getInstanceOrThrow(serverId);
+
+    if (!instance.containerId) {
+      throw new Error(`Server ${serverId} has no associated container`);
+    }
+
+    if (instance.status !== "running") {
+      throw new Error(`Server ${serverId} is not running`);
+    }
+
+    const mode = definition.game === "minecraft" ? "rcon" : "shell";
+    return this.docker.execCommand(instance.containerId, command, mode);
+  }
+
   async getStats(serverId: string) {
     const instance = this.getInstanceOrThrow(serverId);
 

@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import multipart from "@fastify/multipart";
+import websocket from "@fastify/websocket";
 import Database from "better-sqlite3";
 import { initDb } from "./db/schema";
 import { ServerRepository } from "./db/repository";
@@ -24,6 +25,8 @@ async function bootstrap(): Promise<void> {
   const manager = new ServerManager(docker, repo);
 
   const app = Fastify({ logger: true });
+
+  await app.register(websocket);
 
   // Register multipart for file uploads (100MB limit)
   await app.register(multipart, { limits: { fileSize: 100 * 1024 * 1024 } });

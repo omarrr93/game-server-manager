@@ -1,3 +1,4 @@
+import { PassThrough } from "stream";
 import Dockerode from "dockerode";
 import { ContainerConfig, ServerStatus } from "../core/types";
 
@@ -105,6 +106,45 @@ async startContainer(config: ContainerConfig): Promise<string> {
     return this.demuxStream(logBuffer as unknown as Buffer);
   }
 
+  // Streams live log output for a running container. Returns a cleanup function
+  // that should be called when the consumer disconnects. onEnd fires when Docker
+  // closes the log stream (e.g. the container stops).
+  async streamLogs(
+    containerId: string,
+    tail: number,
+    onData: (chunk: string) => void,
+    onEnd: () => void
+  ): Promise<() => void> {
+    const container = this.docker.getContainer(containerId);
+
+    // follow: true returns a multiplexed Node.js stream via callback, not a Buffer.
+    const logStream = await new Promise<NodeJS.ReadableStream>((resolve, reject) => {
+      container.logs(
+        { follow: true, stdout: true, stderr: true, tail, timestamps: true },
+        (err: Error | null, stream: any) => {
+          if (err) reject(err);
+          else resolve(stream);
+        }
+      );
+    });
+
+    // Route both stdout and stderr to the same PassThrough — game consoles mix them.
+    const combined = new PassThrough();
+    this.docker.modem.demuxStream(logStream, combined, combined);
+
+    // Propagate stream close to the PassThrough so consumers get the 'end' event.
+    logStream.on("end", () => combined.end());
+    logStream.on("error", (err: Error) => combined.destroy(err));
+
+    combined.on("data", (chunk: Buffer) => onData(chunk.toString("utf8")));
+    combined.on("end", onEnd);
+
+    return () => {
+      (logStream as any).destroy?.();
+      combined.destroy();
+    };
+  }
+
   async getStats(containerId: string): Promise<ContainerStats> {
     const container = this.docker.getContainer(containerId);
 
@@ -130,6 +170,45 @@ async startContainer(config: ContainerConfig): Promise<string> {
       netInBytes: netIn,
       netOutBytes: netOut,
     };
+  }
+
+  // ─── Exec ───────────────────────────────────────────────────────────────────
+
+  // Runs a command inside a running container via docker exec and returns its
+  // combined stdout+stderr output. Intended for sending console commands to
+  // game servers (e.g. `rcon-cli say Hello` for Minecraft).
+  async execCommand(
+    containerId: string,
+    command: string,
+    mode: "rcon" | "shell" = "shell"
+  ): Promise<string> {
+    const container = this.docker.getContainer(containerId);
+
+    const cmd =
+      mode === "rcon"
+        ? ["rcon-cli", ...command.split(" ")]
+        : ["sh", "-c", command];
+
+    const exec = await container.exec({
+      Cmd: cmd,
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+
+    const stream = await exec.start({ hijack: true, stdin: false });
+
+    return new Promise<string>((resolve, reject) => {
+      const combined = new PassThrough();
+      this.docker.modem.demuxStream(stream, combined, combined);
+
+      const chunks: Buffer[] = [];
+      combined.on("data", (chunk: Buffer) => chunks.push(chunk));
+      combined.on("end", () => resolve(Buffer.concat(chunks).toString("utf8").trim()));
+      combined.on("error", reject);
+
+      // End the PassThrough when the exec stream finishes.
+      (stream as any).on("end", () => combined.end());
+    });
   }
 
   // ─── Status ─────────────────────────────────────────────────────────────────

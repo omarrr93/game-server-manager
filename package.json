@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon --exec ts-node src/app.ts",
+    "dev": "nodemon --watch src --ext ts --exec ts-node src/app.ts",
     "build": "tsc",
     "start": "node dist/app.js"
   },
@@ -14,6 +14,7 @@
   "license": "ISC",
   "dependencies": {
     "@fastify/multipart": "^10.0.0",
+    "@fastify/websocket": "^11.2.0",
     "better-sqlite3": "^12.8.0",
     "dockerode": "^4.0.10",
     "fastify": "^5.8.4",
@@ -25,6 +26,7 @@
     "@types/dockerode": "^4.0.1",
     "@types/node": "^25.5.0",
     "@types/uuid": "^9.0.8",
+    "@types/ws": "^8.18.1",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.2"

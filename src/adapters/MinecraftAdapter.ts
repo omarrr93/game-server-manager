@@ -48,6 +48,8 @@ export class MinecraftAdapter extends BaseAdapter {
       TYPE: config.serverType.toUpperCase(), // itzg expects "PAPER", "FABRIC" etc.
       MEMORY: config.memory,
       VERSION: config.version ?? "LATEST",
+      ENABLE_RCON: "true",
+      RCON_PASSWORD: "gscp_rcon",
     };
 
     if (config.motd) {
