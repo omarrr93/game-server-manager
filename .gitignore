@@ -4,3 +4,7 @@ dist/
 .env
 .cursor/
 .cursorrules
+data/
+*.db-shm
+*.db-wal
+client/dist/

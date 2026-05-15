@@ -28,3 +28,20 @@
 [10:31:29] [Server thread/INFO]: [Not Secure] [Rcon] hi
 [10:31:29] [RCON Client /0:0:0:0:0:0:0:1 #3/INFO]: Thread RCON Client /0:0:0:0:0:0:0:1 shutting down
 [10:31:50] [Server thread/INFO]: Server empty for 60 seconds, pausing
+[10:34:26] [RCON Listener #1/INFO]: Thread RCON Client /0:0:0:0:0:0:0:1 started
+[10:34:26] [Server thread/INFO]: [Not Secure] [Rcon] testing
+[10:34:26] [RCON Client /0:0:0:0:0:0:0:1 #4/INFO]: Thread RCON Client /0:0:0:0:0:0:0:1 shutting down
+[10:35:51] [RCON Listener #1/INFO]: Thread RCON Client /0:0:0:0:0:0:0:1 started
+[10:35:51] [Server thread/INFO]: [Rcon: Stopping the server]
+[10:35:51] [RCON Client /0:0:0:0:0:0:0:1 #5/INFO]: Thread RCON Client /0:0:0:0:0:0:0:1 shutting down
+[10:35:51] [Server thread/INFO]: Stopping server
+[10:35:51] [Server thread/INFO]: Saving players
+[10:35:51] [Server thread/INFO]: Saving worlds
+[10:35:51] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:overworld
+[10:35:51] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_end
+[10:35:51] [Server thread/INFO]: Saving chunks for level 'ServerLevel[world]'/minecraft:the_nether
+[10:35:51] [Server thread/INFO]: ThreadedAnvilChunkStorage (world): All chunks are saved
+[10:35:51] [Server thread/INFO]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[10:35:51] [Server thread/INFO]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[10:35:51] [Server thread/INFO]: ThreadedAnvilChunkStorage: All dimensions are saved
+[10:35:51] [Server thread/INFO]: Thread RCON Listener stopped
